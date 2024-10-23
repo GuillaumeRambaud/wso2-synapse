@@ -387,7 +387,7 @@ public class RabbitMQStore extends AbstractMessageStore {
                 channel.abort();
             } catch (IOException e) {
                 if (log.isDebugEnabled()) {
-                    log.debug(nameString() + " error occurred while abotring the malformed channel Error: " + e.getMessage());
+                    log.debug(nameString() + " error occurred while aborting the malformed channel Error: " + e.getMessage());
                 }
             }
             channel = createChannel(producerConnection);
