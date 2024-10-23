@@ -59,21 +59,24 @@ import java.util.regex.Pattern;
  */
 public class RabbitMQStore extends AbstractMessageStore {
 
-    private static final Log log = LogFactory.getLog(RabbitMQStore.class.getName());
-    // default broker properties
-    public static final String USERNAME = "store.rabbitmq.username";
-    public static final String PASSWORD = "store.rabbitmq.password";
-    public static final String HOST_NAME = "store.rabbitmq.host.name";
-    public static final String HOST_PORT = "store.rabbitmq.host.port";
-    public static final String VIRTUAL_HOST = "store.rabbitmq.virtual.host";
-    public static final String QUEUE_NAME = "store.rabbitmq.queue.name";
-    public static final String ROUTING_KEY = "store.rabbitmq.route.key";
-    public static final String EXCHANGE_NAME = "store.rabbitmq.exchange.name";
-    public static final String RETRY_INTERVAL = "rabbitmq.connection.retry.interval";
-    public static final String RETRY_COUNT = "rabbitmq.connection.retry.count";
-    public static final String PUBLISHER_CONFIRMS = "store.producer.guaranteed.delivery.enable";
-    public static final int DEFAULT_RETRY_INTERVAL = 30000;
-    public static final int DEFAULT_RETRY_COUNT = 3;
+	private static final Log log = LogFactory.getLog(RabbitMQStore.class.getName());
+	// default broker properties
+	public static final String USERNAME = "store.rabbitmq.username";
+	public static final String PASSWORD = "store.rabbitmq.password";
+	public static final String HOST_NAME = "store.rabbitmq.host.name";
+	public static final String HOST_PORT = "store.rabbitmq.host.port";
+	public static final String VIRTUAL_HOST = "store.rabbitmq.virtual.host";
+	public static final String QUEUE_NAME = "store.rabbitmq.queue.name";
+	public static final String ROUTING_KEY = "store.rabbitmq.route.key";
+	public static final String EXCHANGE_NAME = "store.rabbitmq.exchange.name";
+	public static final String RETRY_INTERVAL = "rabbitmq.connection.retry.interval";
+	public static final String RETRY_COUNT = "rabbitmq.connection.retry.count";
+	public static final String HEARTBEAT = "rabbitmq.connection.factory.heartbeat";
+	public static final String CONNECTION_TIMEOUT = "rabbitmq.connection.factory.timeout";
+	public static final String NETWORK_RECOVERY_INTERVAL = "rabbitmq.connection.factory.network.recovery.interval";
+	public static final String PUBLISHER_CONFIRMS = "store.producer.guaranteed.delivery.enable";
+	public static final int DEFAULT_RETRY_INTERVAL = 30000;
+	public static final int DEFAULT_RETRY_COUNT = 3;
 
     // ssl related properties
     public static final String SSL_ENABLED = "rabbitmq.connection.ssl.enabled";
@@ -134,24 +137,30 @@ public class RabbitMQStore extends AbstractMessageStore {
         channel = createChannel(producerConnection);
     }
 
-    /**
-     * Initiate rabbitmq connection factory from the connection parameters
-     */
-    private void initConnectionFactory() {
-        String hostnames = StringUtils.defaultIfEmpty(
-                (String) parameters.get(HOST_NAME), ConnectionFactory.DEFAULT_HOST);
-        String ports = StringUtils.defaultIfEmpty(
-                (String) parameters.get(HOST_PORT), String.valueOf(ConnectionFactory.DEFAULT_AMQP_PORT));
-        String username = StringUtils.defaultIfEmpty(resolveVaultExpressions((String) parameters.get(USERNAME)),
-                ConnectionFactory.DEFAULT_USER);
-        String password = StringUtils.defaultIfEmpty(resolveVaultExpressions((String) parameters.get(PASSWORD)),
-                ConnectionFactory.DEFAULT_PASS);
-        String virtualHost = StringUtils.defaultIfEmpty(
-                (String) parameters.get(VIRTUAL_HOST), ConnectionFactory.DEFAULT_VHOST);
-        boolean sslEnabled = BooleanUtils.toBooleanDefaultIfNull(
-                BooleanUtils.toBoolean((String) parameters.get(SSL_ENABLED)), false);
-        this.retryInterval = NumberUtils.toInt((String) parameters.get(RETRY_INTERVAL), DEFAULT_RETRY_INTERVAL);
-        this.retryCount = NumberUtils.toInt((String) parameters.get(RETRY_COUNT), DEFAULT_RETRY_COUNT);
+	/**
+	 * Initiate rabbitmq connection factory from the connection parameters
+	 */
+	private void initConnectionFactory() {
+		String hostnames = StringUtils.defaultIfEmpty((String) parameters.get(HOST_NAME),
+				ConnectionFactory.DEFAULT_HOST);
+		String ports = StringUtils.defaultIfEmpty((String) parameters.get(HOST_PORT),
+				String.valueOf(ConnectionFactory.DEFAULT_AMQP_PORT));
+		String username = StringUtils.defaultIfEmpty(resolveVaultExpressions((String) parameters.get(USERNAME)),
+				ConnectionFactory.DEFAULT_USER);
+		String password = StringUtils.defaultIfEmpty(resolveVaultExpressions((String) parameters.get(PASSWORD)),
+				ConnectionFactory.DEFAULT_PASS);
+		String virtualHost = StringUtils.defaultIfEmpty((String) parameters.get(VIRTUAL_HOST),
+				ConnectionFactory.DEFAULT_VHOST);
+		int heartbeat = NumberUtils.toInt((String) parameters.get(HEARTBEAT), ConnectionFactory.DEFAULT_HEARTBEAT);
+		int connectionTimeout = NumberUtils.toInt((String) parameters.get(CONNECTION_TIMEOUT),
+				ConnectionFactory.DEFAULT_CONNECTION_TIMEOUT);
+		long networkRecoveryInterval = NumberUtils.toLong((String) parameters.get(NETWORK_RECOVERY_INTERVAL),
+				ConnectionFactory.DEFAULT_NETWORK_RECOVERY_INTERVAL);
+
+		boolean sslEnabled = BooleanUtils
+				.toBooleanDefaultIfNull(BooleanUtils.toBoolean((String) parameters.get(SSL_ENABLED)), false);
+		this.retryInterval = NumberUtils.toInt((String) parameters.get(RETRY_INTERVAL), DEFAULT_RETRY_INTERVAL);
+		this.retryCount = NumberUtils.toInt((String) parameters.get(RETRY_COUNT), DEFAULT_RETRY_COUNT);
 
         String[] hostnameArray = hostnames.split(",");
         String[] portArray = ports.split(",");
@@ -343,34 +352,43 @@ public class RabbitMQStore extends AbstractMessageStore {
         super.destroy();
     }
 
-    /**
-     * Create a new {@link RabbitMQProducer} object
-     *
-     * @return a message producer
-     */
-    @Override
-    public MessageProducer getProducer() {
-        RabbitMQProducer producer = new RabbitMQProducer(this);
-        producer.setId(nextProducerId());
-        producer.setExchangeName(exchangeName);
-        producer.setRoutingKey(routingKey);
-        if (producerConnection == null) {
-            producerConnection = createConnection();
-        } else if (!producerConnection.isOpen()) {
-            producerConnection.abort();
-            producerConnection = createConnection();
-        }
-        producer.setConnection(producerConnection);
-        producer.setPublisherConfirmsEnabled(publisherConfirmsEnabled);
-        if (log.isDebugEnabled()) {
-            log.debug(nameString() + " created message producer " + producer.getId());
-        }
-        if (channel == null) {
-            channel = createChannel(producerConnection);
-        }
-        producer.setChannel(channel);
-        return producer;
-    }
+	/**
+	 * Create a new {@link RabbitMQProducer} object
+	 *
+	 * @return a message producer
+	 */
+	@Override
+	public MessageProducer getProducer() {
+		RabbitMQProducer producer = new RabbitMQProducer(this);
+		producer.setId(nextProducerId());
+		producer.setExchangeName(exchangeName);
+		producer.setRoutingKey(routingKey);
+		if (producerConnection == null) {
+			producerConnection = createConnection();
+		} else if (!producerConnection.isOpen()) {
+			producerConnection.abort();
+			producerConnection = createConnection();
+		}
+		producer.setConnection(producerConnection);
+		producer.setPublisherConfirmsEnabled(publisherConfirmsEnabled);
+		if (log.isDebugEnabled()) {
+			log.debug(nameString() + " created message producer " + producer.getId());
+		}
+		if (channel == null) {
+			channel = createChannel(producerConnection);
+		} else if (!channel.isOpen()) {
+			try {
+				channel.abort();
+			} catch (IOException e) {
+				if (log.isDebugEnabled()) {
+					log.debug(nameString() + " error aborting channel: " + e.getMessage());
+				}
+			}
+			channel = createChannel(producerConnection);
+		}
+		producer.setChannel(channel);
+		return producer;
+	}
 
     /**
      * Resolve secure-vault property values
@@ -430,10 +448,23 @@ public class RabbitMQStore extends AbstractMessageStore {
         return new Axis2MessageContext(msgCtx, configuration, synapseEnvironment);
     }
 
-    @Override
-    public MessageContext remove() throws NoSuchElementException {
-        return null;
-    }
+	@Override
+	public int size() {
+		if (channel != null && channel.isOpen()) {
+			try {
+				return Long.valueOf(channel.messageCount(queueName)).intValue();
+			} catch (IOException e) {
+				log.warn(nameString() + " error retrieving message count for queue [" + queueName + "]: "
+						+ e.getMessage());
+			}
+		}
+		return super.size();
+	}
+
+	@Override
+	public MessageContext remove() throws NoSuchElementException {
+		return null;
+	}
 
     @Override
     public void clear() {
