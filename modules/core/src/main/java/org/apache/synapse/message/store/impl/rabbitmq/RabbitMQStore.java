@@ -17,11 +17,7 @@
  */
 package org.apache.synapse.message.store.impl.rabbitmq;
 
-import com.rabbitmq.client.Address;
-import com.rabbitmq.client.BuiltinExchangeType;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.*;
 import org.apache.commons.lang.BooleanUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.math.NumberUtils;
@@ -47,9 +43,7 @@ import javax.net.ssl.TrustManagerFactory;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.KeyStore;
-import java.util.HashMap;
-import java.util.List;
-import java.util.NoSuchElementException;
+import java.util.*;
 import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -65,8 +59,9 @@ public class RabbitMQStore extends AbstractMessageStore {
     public static final String HOST_NAME = "store.rabbitmq.host.name";
     public static final String HOST_PORT = "store.rabbitmq.host.port";
     public static final String VIRTUAL_HOST = "store.rabbitmq.virtual.host";
-    public static final String QUEUE_NAME = "store.rabbitmq.queue.name";
     public static final String ROUTING_KEY = "store.rabbitmq.route.key";
+    public static final String QUEUE_NAME = "store.rabbitmq.queue.name";
+    public static final String QUEUE_TYPE = "store.rabbitmq.queue.type";
     public static final String EXCHANGE_NAME = "store.rabbitmq.exchange.name";
     public static final String RETRY_INTERVAL = "rabbitmq.connection.retry.interval";
     public static final String RETRY_COUNT = "rabbitmq.connection.retry.count";
@@ -116,6 +111,7 @@ public class RabbitMQStore extends AbstractMessageStore {
         if (producerConnection != null) {
             try (Channel channel = producerConnection.createChannel()) {
                 queueName = (String) parameters.get(QUEUE_NAME);
+                QueueType queueType = QueueType.fromType((String) parameters.getOrDefault(QUEUE_TYPE, QueueType.CLASSIC.type));
                 routingKey = (String) parameters.get(ROUTING_KEY);
                 exchangeName = (String) parameters.get(EXCHANGE_NAME);
                 if (StringUtils.isEmpty(queueName)) {
@@ -124,7 +120,7 @@ public class RabbitMQStore extends AbstractMessageStore {
                 if (StringUtils.isEmpty(routingKey)) {
                     routingKey = queueName;
                 }
-                declareQueue(channel, queueName);
+                declareQueue(channel, queueName, Collections.singletonMap("x-queue-type", queueType.type));
                 declareExchange(channel, exchangeName, queueName, routingKey);
                 log.info(nameString() + ". Initialized... ");
             } catch (TimeoutException | IOException e) {
@@ -315,8 +311,8 @@ public class RabbitMQStore extends AbstractMessageStore {
      * @param queueName a name of the queue to declare
      * @throws IOException
      */
-    private void declareQueue(Channel channel, String queueName) throws IOException {
-        channel.queueDeclare(queueName, true, false, false, new HashMap<String, Object>());
+    private void declareQueue(Channel channel, String queueName, Map<String, Object> arguments) throws IOException {
+        channel.queueDeclare(queueName, true, false, false, arguments);
     }
 
     /**
