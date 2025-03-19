@@ -94,11 +94,16 @@ public class RabbitMQProducer implements MessageProducer {
             publishMessage(channel, exchangeName, routingKey, basicProperties, message);
             if (publisherConfirmsEnabled) {
                 result = channel.waitForConfirms();
+                if(!result) {
+                    String errorMsg = getId() + ". Ignored MessageId: " + synCtx.getMessageID() + ". " +
+                            "Could not store message to store [" + store.getName() + "]. WaitForConfirms returns : " + result;
+                    log.error(errorMsg);
+                }
             } else {
                 result = true;
-            }
-            if (log.isDebugEnabled()) {
-                log.debug(getId() + ". Stored MessageId: " + synCtx.getMessageID());
+                if (log.isDebugEnabled()) {
+                    log.debug(getId() + ". Stored MessageId: " + synCtx.getMessageID());
+                }
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
