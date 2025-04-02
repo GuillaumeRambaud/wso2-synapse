@@ -47,9 +47,7 @@ import javax.net.ssl.TrustManagerFactory;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.KeyStore;
-import java.util.HashMap;
-import java.util.NoSuchElementException;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -67,6 +65,7 @@ public class RabbitMQStore extends AbstractMessageStore {
     public static final String HOST_PORT = "store.rabbitmq.host.port";
     public static final String VIRTUAL_HOST = "store.rabbitmq.virtual.host";
     public static final String QUEUE_NAME = "store.rabbitmq.queue.name";
+    public static final String QUEUE_TYPE = "store.rabbitmq.queue.type";
     public static final String ROUTING_KEY = "store.rabbitmq.route.key";
     public static final String EXCHANGE_NAME = "store.rabbitmq.exchange.name";
     public static final String RETRY_INTERVAL = "rabbitmq.connection.retry.interval";
@@ -122,7 +121,10 @@ public class RabbitMQStore extends AbstractMessageStore {
                 if (StringUtils.isEmpty(routingKey)) {
                     routingKey = queueName;
                 }
-                declareQueue(channel, queueName);
+                // Retrieve the queue type from configuration, defaulting to CLASSIC if not provided
+                QueueType queueType = QueueType.fromType((String) parameters.getOrDefault(QUEUE_TYPE, QueueType.QUORUM.type));
+
+                declareQueue(channel, queueName, Collections.singletonMap("x-queue-type", queueType.type));
                 declareExchange(channel, exchangeName, queueName, routingKey);
                 log.info(nameString() + ". Initialized... ");
             } catch (TimeoutException | IOException e) {
@@ -298,14 +300,15 @@ public class RabbitMQStore extends AbstractMessageStore {
     }
 
     /**
-     * Helper method to declare queue when direct channel is given
+     * Declares a queue with the given arguments.
      *
-     * @param channel   a rabbitmq channel
+     * @param channel   The RabbitMQ channel.
      * @param queueName a name of the queue to declare
-     * @throws IOException
+     * @param arguments The additional arguments to configure the queue.
+     * @throws IOException If an error occurs while declaring the queue.
      */
-    private void declareQueue(Channel channel, String queueName) throws IOException {
-        channel.queueDeclare(queueName, true, false, false, new HashMap<String, Object>());
+    private void declareQueue(Channel channel, String queueName, Map<String, Object> arguments) throws IOException {
+        channel.queueDeclare(queueName, true, false, false, arguments);
     }
 
     /**
